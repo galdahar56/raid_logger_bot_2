@@ -32,11 +32,11 @@ client.on('messageCreate', async message => {
 
   if (embed.description) {
     const dungeonMatch = embed.description.match(/Dungeon[:\-]?\s*(.+)/i);
-    if (dungeonMatch) dungeon = dungeonMatch[1].trim();
+    if (dungeonMatch) dungeon = dungeonMatch[1].replace(/[*_`~]/g, '').trim();
 
     const dateMatch = embed.description.match(/Date[:\-]?\s*(.+)/i);
     if (dateMatch) {
-      const rawDate = dateMatch[1].trim();
+      const rawDate = dateMatch[1].replace(/[*_`~]/g, '').trim();
       const parsedDate = new Date(rawDate);
       if (!isNaN(parsedDate)) {
         eventTime = parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
@@ -46,7 +46,7 @@ client.on('messageCreate', async message => {
     }
 
     const runIdMatch = embed.description.match(/Run\s*ID[:\-]?\s*(.+)/i);
-    if (runIdMatch) runId = runIdMatch[1].trim();
+    if (runIdMatch) runId = runIdMatch[1].replace(/[*_`~]/g, '').trim();
   }
 
   eventCache.set(message.id, {
