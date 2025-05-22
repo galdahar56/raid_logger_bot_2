@@ -26,15 +26,26 @@ client.on('messageCreate', async message => {
   const embed = message.embeds[0];
   if (!embed) return;
 
-  const title = embed.title || "Unknown Dungeon";
-  const dateField = embed.fields?.find(f => f.name.toLowerCase().includes("date") || f.name.toLowerCase().includes("time"));
-  const eventTime = dateField ? dateField.value : "Unknown Time";
+  let dungeon = "Unknown";
+  let eventTime = "Unknown";
+  let runId = "N/A";
 
-  const runIdMatch = embed.footer?.text?.match(/Run_ID[:\-]?\s*(\w+)/i);
-  const runId = runIdMatch ? runIdMatch[1] : message.id;
+  if (embed.description) {
+    const dungeonMatch = embed.description.match(/Dungeon[:\-]?\s*(.+)/i);
+    if (dungeonMatch) dungeon = dungeonMatch[1].trim();
+
+    const dateMatch = embed.description.match(/Date[:\-]?\s*(.+)/i);
+    if (dateMatch) eventTime = dateMatch[1].trim();
+  }
+
+  if (embed.footer?.text) {
+    const runIdMatch = embed.footer.text.match(/Run_ID[:\-]?\s*(\w+)/i);
+    if (runIdMatch) runId = runIdMatch[1];
+  }
 
   eventCache.set(message.id, {
-    dungeon: title,
+    dungeon,
+    runId,
     eventTime
   });
 
@@ -61,7 +72,9 @@ client.on('interactionCreate', async interaction => {
 
   const username = interaction.user.tag;
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
-  const eventInfo = eventCache.get(messageId) || { dungeon: "Unknown", eventTime: "Unknown" };
+  const eventInfo = eventCache.get(messageId) || {
+    dungeon: "Unknown", runId: "N/A", eventTime: "Unknown"
+  };
 
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
@@ -71,7 +84,7 @@ client.on('interactionCreate', async interaction => {
     range: 'Signup Log!A:E',
     valueInputOption: 'USER_ENTERED',
     resource: {
-      values: [[username, role.toUpperCase(), eventInfo.dungeon, eventInfo.eventTime, timestamp]]
+      values: [[username, role.toUpperCase(), eventInfo.dungeon, eventInfo.runId, eventInfo.eventTime, timestamp]]
     }
   });
 
