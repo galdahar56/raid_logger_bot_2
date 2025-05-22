@@ -44,11 +44,10 @@ client.on('messageCreate', async message => {
         eventTime = rawDate;
       }
     }
-  }
 
-  let footerText = embed.footer?.text?.replace(/\*\*/g, '') || "";
-  const runIdMatch = footerText.match(/Run\s*ID[:\-]?\s*(.+)/i);
-  if (runIdMatch) runId = runIdMatch[1].trim();
+    const runIdMatch = embed.description.match(/Run\s*ID[:\-]?\s*(.+)/i);
+    if (runIdMatch) runId = runIdMatch[1].trim();
+  }
 
   eventCache.set(message.id, {
     dungeon,
