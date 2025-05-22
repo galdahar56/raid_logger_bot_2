@@ -41,14 +41,14 @@ client.on('messageCreate', async message => {
       if (!isNaN(parsedDate)) {
         eventTime = parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
       } else {
-        eventTime = rawDate; // fallback if parse fails
+        eventTime = rawDate;
       }
     }
   }
 
   let footerText = embed.footer?.text?.replace(/\*\*/g, '') || "";
-  const runIdMatch = footerText.match(/Run\s*ID[:\-]?\s*(\w+)/i);
-  if (runIdMatch) runId = runIdMatch[1];
+  const runIdMatch = footerText.match(/Run\s*ID[:\-]?\s*(.+)/i);
+  if (runIdMatch) runId = runIdMatch[1].trim();
 
   eventCache.set(message.id, {
     dungeon,
