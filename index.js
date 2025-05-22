@@ -35,13 +35,20 @@ client.on('messageCreate', async message => {
     if (dungeonMatch) dungeon = dungeonMatch[1].trim();
 
     const dateMatch = embed.description.match(/Date[:\-]?\s*(.+)/i);
-    if (dateMatch) eventTime = dateMatch[1].trim();
+    if (dateMatch) {
+      const rawDate = dateMatch[1].trim();
+      const parsedDate = new Date(rawDate);
+      if (!isNaN(parsedDate)) {
+        eventTime = parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
+      } else {
+        eventTime = rawDate; // fallback if parse fails
+      }
+    }
   }
 
-  if (embed.footer?.text) {
-    const runIdMatch = embed.footer.text.match(/Run_ID[:\-]?\s*(\w+)/i);
-    if (runIdMatch) runId = runIdMatch[1];
-  }
+  let footerText = embed.footer?.text?.replace(/\*\*/g, '') || "";
+  const runIdMatch = footerText.match(/Run\s*ID[:\-]?\s*(\w+)/i);
+  if (runIdMatch) runId = runIdMatch[1];
 
   eventCache.set(message.id, {
     dungeon,
@@ -71,7 +78,8 @@ client.on('interactionCreate', async interaction => {
   if (action !== 'signup') return;
 
   const username = interaction.user.tag;
-  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
+
   const eventInfo = eventCache.get(messageId) || {
     dungeon: "Unknown", runId: "N/A", eventTime: "Unknown"
   };
@@ -81,7 +89,7 @@ client.on('interactionCreate', async interaction => {
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: 'Signup Log!A:E',
+    range: 'Signup Log!A:F',
     valueInputOption: 'USER_ENTERED',
     resource: {
       values: [[username, role.toUpperCase(), eventInfo.dungeon, eventInfo.runId, eventInfo.eventTime, timestamp]]
