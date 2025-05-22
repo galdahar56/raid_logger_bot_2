@@ -59,7 +59,7 @@ client.on('interactionCreate', async interaction => {
   const [action, role, messageId] = interaction.customId.split('_');
   if (action !== 'signup') return;
 
-  const userId = interaction.user.id;
+  const username = interaction.user.tag;
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
   const eventInfo = eventCache.get(messageId) || { dungeon: "Unknown", eventTime: "Unknown" };
 
@@ -71,7 +71,7 @@ client.on('interactionCreate', async interaction => {
     range: 'Signup Log!A:E',
     valueInputOption: 'USER_ENTERED',
     resource: {
-      values: [[userId, role.toUpperCase(), eventInfo.dungeon, eventInfo.eventTime, timestamp]]
+      values: [[username, role.toUpperCase(), eventInfo.dungeon, eventInfo.eventTime, timestamp]]
     }
   });
 
