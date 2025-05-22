@@ -13,6 +13,7 @@ const auth = new google.auth.GoogleAuth({
 
 const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
+const eventCache = new Map();
 
 client.on('ready', () => {
   console.log(`✅ Bot ready as ${client.user.tag}`);
@@ -22,42 +23,55 @@ client.on('messageCreate', async message => {
   if (message.author.id === client.user.id) return;
   if (!message.author.bot || message.channel.id !== CHANNEL_ID) return;
 
-  const runIdMatch = message.content.match(/Run_ID\s*[:\-]?\s*(\w+)/i);
-  const runId = runIdMatch ? runIdMatch[1] : "N/A";
+  const embed = message.embeds[0];
+  if (!embed) return;
 
-  const embed = new EmbedBuilder()
+  const title = embed.title || "Unknown Dungeon";
+  const dateField = embed.fields?.find(f => f.name.toLowerCase().includes("date") || f.name.toLowerCase().includes("time"));
+  const eventTime = dateField ? dateField.value : "Unknown Time";
+
+  const runIdMatch = embed.footer?.text?.match(/Run_ID[:\-]?\s*(\w+)/i);
+  const runId = runIdMatch ? runIdMatch[1] : message.id;
+
+  eventCache.set(message.id, {
+    dungeon: title,
+    eventTime
+  });
+
+  const trackerEmbed = new EmbedBuilder()
     .setTitle('📥 Sign-Up Tracker')
     .setDescription('Click your role to be logged in the signup sheet for this event.')
     .setColor(0x00AE86);
 
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`signup_tank_${runId}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`signup_healer_${runId}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`signup_dps1_${runId}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`signup_dps2_${runId}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`signup_dps1_${message.id}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary)
   );
 
-  await message.channel.send({ embeds: [embed], components: [row] });
+  await message.channel.send({ embeds: [trackerEmbed], components: [row] });
 });
 
 client.on('interactionCreate', async interaction => {
   if (!interaction.isButton()) return;
 
-  const [action, role, runId] = interaction.customId.split('_');
+  const [action, role, messageId] = interaction.customId.split('_');
   if (action !== 'signup') return;
 
-  const username = `${interaction.user.username}#${interaction.user.discriminator}`;
+  const userId = interaction.user.id;
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+  const eventInfo = eventCache.get(messageId) || { dungeon: "Unknown", eventTime: "Unknown" };
 
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: 'Signup Log!A:D',
+    range: 'Signup Log!A:E',
     valueInputOption: 'USER_ENTERED',
     resource: {
-      values: [[role.toUpperCase(), username, timestamp, runId || "N/A"]]
+      values: [[userId, role.toUpperCase(), eventInfo.dungeon, eventInfo.eventTime, timestamp]]
     }
   });
 
