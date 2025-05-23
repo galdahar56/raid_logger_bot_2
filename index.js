@@ -22,6 +22,32 @@ client.on('ready', () => {
   console.log(`✅ Bot ready as ${client.user.tag}`);
 });
 
+client.on('ready', async () => {
+  console.log(`✅ Bot ready as ${client.user.tag}`);
+
+  try {
+    const authClient = await auth.getClient();
+    const sheets = google.sheets({ version: 'v4', auth: authClient });
+
+    const response = await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.SHEET_ID,
+      range: 'Test!A1',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[
+          '✅ Bot was able to write to the sheet!',
+          new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })
+        ]]
+      }
+    });
+
+    console.log('✅ Google Sheets write succeeded:', response.statusText);
+  } catch (error) {
+    console.error('❌ Google Sheets test failed:', error);
+  }
+});
+
+
 client.on('messageCreate', async message => {
   if (message.author.id === client.user.id) return;
   if (!message.author.bot || message.channel.id !== CHANNEL_ID) return;
