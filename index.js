@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { google } = require('googleapis');
@@ -53,8 +52,7 @@ client.on('messageCreate', async message => {
   eventCache.set(message.id, {
     dungeon,
     runId,
-    eventTime,
-    rolesUsed: {}
+    eventTime
   });
 
   const trackerEmbed = new EmbedBuilder()
@@ -78,21 +76,12 @@ client.on('interactionCreate', async interaction => {
   const [action, role, messageId] = interaction.customId.split('_');
   if (action !== 'signup') return;
 
-  const event = eventCache.get(messageId);
-  if (!event) {
-    await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
-    return;
-  }
-
-  if (event.rolesUsed[role]) {
-    await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
-    return;
-  }
-
   const username = interaction.user.tag;
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
 
-  event.rolesUsed[role] = username;
+  const eventInfo = eventCache.get(messageId) || {
+    dungeon: "Unknown", runId: "N/A", eventTime: "Unknown"
+  };
 
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
@@ -102,105 +91,11 @@ client.on('interactionCreate', async interaction => {
     range: 'Signup Log!A:F',
     valueInputOption: 'USER_ENTERED',
     resource: {
-      values: [[username, role.toUpperCase(), event.dungeon, event.runId, event.eventTime, timestamp]]
+      values: [[username, role.toUpperCase(), eventInfo.dungeon, eventInfo.runId, eventInfo.eventTime, timestamp]]
     }
   });
-
-  try {
-    const originalMessage = await interaction.channel.messages.fetch(messageId);
-    const oldRow = originalMessage.components[0];
-
-    const newRow = new ActionRowBuilder().addComponents(
-      oldRow.components.map(button => {
-        if (button.customId === interaction.customId) {
-          return ButtonBuilder.from(button).setDisabled(true);
-        }
-        return button;
-      })
-    );
-
-    await originalMessage.edit({ components: [newRow] });
-  } catch (err) {
-    console.error('Failed to disable button:', err);
-  }
 
   await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
 });
 
 client.login(process.env.DISCORD_TOKEN);
-require('dotenv').config();
-const { Client, GatewayIntentBits, ButtonBuilder, ButtonStyle, ActionRowBuilder, Events } = require('discord.js');
-
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
-});
-
-const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
-const TOKEN = process.env.DISCORD_TOKEN;
-
-const claimedRoles = new Map(); // roleName => userId
-const userSelections = new Set(); // userId
-
-client.once('ready', async () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-
-  const channel = await client.channels.fetch(CHANNEL_ID);
-  if (!channel) {
-    console.error("❌ Channel not found. Check DISCORD_CHANNEL_ID in .env.");
-    return;
-  }
-
-  const row = createButtons();
-  await channel.send({
-    content: "🎮 Select your role (one per user, one user per role):",
-    components: row
-  });
-});
-
-client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isButton()) return;
-
-  const userId = interaction.user.id;
-  const role = interaction.customId;
-
-  if (userSelections.has(userId)) {
-    await interaction.reply({ content: "❌ You’ve already selected a role.", ephemeral: true });
-    return;
-  }
-
-  if (claimedRoles.has(role)) {
-    await interaction.reply({ content: `❌ ${role} is already taken by <@${claimedRoles.get(role)}>`, ephemeral: true });
-    return;
-  }
-
-  userSelections.add(userId);
-  claimedRoles.set(role, userId);
-
-  const updatedButtons = createButtons();
-
-  await interaction.update({
-    content: `✅ <@${userId}> has claimed **${role}**.`,
-    components: updatedButtons
-  });
-});
-
-function createButtons() {
-  const roles = ['tank', 'healer', 'dps1', 'dps2'];
-  const row = new ActionRowBuilder();
-
-  for (const role of roles) {
-    const isTaken = claimedRoles.has(role);
-
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(role)
-        .setLabel(role.charAt(0).toUpperCase() + role.slice(1))
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(isTaken)
-    );
-  }
-
-  return [row];
-}
-
-client.login(TOKEN);
