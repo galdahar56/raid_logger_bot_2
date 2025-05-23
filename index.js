@@ -91,39 +91,36 @@ client.on('interactionCreate', async interaction => {
       claimedRolesPerMessage.set(messageId, roleClaims);
       userClaimsPerMessage.set(messageId, userClaims);
 
-      const ranges = ['Signup Log!A2:F', 'Run_Schedule!A2:F'];
-      for (const range of ranges) {
-        const sheetData = await sheets.spreadsheets.values.get({
-          spreadsheetId: SHEET_ID,
-          range: range
-        });
+      const sheetData = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: 'Signup Log!A2:F'
+      });
 
-        const rows = sheetData.data.values || [];
-        const rowsToDelete = [];
-        rows.forEach((row, index) => {
-          if (row[0] === username && row[3] === eventInfo.runId) {
-            rowsToDelete.push(index + 1);
-          }
-        });
-
-        if (rowsToDelete.length > 0) {
-          rowsToDelete.reverse();
-          const deleteRequests = rowsToDelete.map(rowIndex => ({
-            deleteDimension: {
-              range: {
-                sheetId: 1036204069, // Replace with actual Sheet tab ID if needed
-                dimension: 'ROWS',
-                startIndex: rowIndex,
-                endIndex: rowIndex + 1
-              }
-            }
-          }));
-
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId: SHEET_ID,
-            requestBody: { requests: deleteRequests }
-          });
+      const rows = sheetData.data.values || [];
+      const rowsToDelete = [];
+      rows.forEach((row, index) => {
+        if (row[0] === username && row[3] === eventInfo.runId) {
+          rowsToDelete.push(index + 1);
         }
+      });
+
+      if (rowsToDelete.length > 0) {
+        rowsToDelete.reverse();
+        const deleteRequests = rowsToDelete.map(rowIndex => ({
+          deleteDimension: {
+            range: {
+              sheetId: 0, // Replace with actual Sheet tab ID if needed
+              dimension: 'ROWS',
+              startIndex: rowIndex,
+              endIndex: rowIndex + 1
+            }
+          }
+        }));
+
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SHEET_ID,
+          requestBody: { requests: deleteRequests }
+        });
       }
 
       await interaction.reply({ content: '✅ Your role and sign-up have been removed.', ephemeral: true });
