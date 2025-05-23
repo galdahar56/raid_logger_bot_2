@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { google } = require('googleapis');
@@ -14,8 +15,8 @@ const auth = new google.auth.GoogleAuth({
 const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const eventCache = new Map();
-const claimedRolesPerMessage = new Map();
-const userClaimsPerMessage = new Map();
+const claimedRolesPerMessage = new Map(); // messageId => { role: username }
+const userClaimsPerMessage = new Map();   // messageId => { userId: role }
 
 client.on('ready', () => {
   console.log(`✅ Bot ready as ${client.user.tag}`);
@@ -27,9 +28,6 @@ client.on('messageCreate', async message => {
 
   const embed = message.embeds[0];
   if (!embed) return;
-
-  const title = embed.title || "";
-  if (!title.includes("Raid Organizer")) return;
 
   let dungeon = "Unknown";
   let eventTime = "Unknown";
@@ -92,6 +90,7 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ content: '❌ This role is already taken!', ephemeral: true });
   }
 
+  // Store claim
   roleClaims[role] = username;
   userClaims[userId] = role;
   claimedRolesPerMessage.set(messageId, roleClaims);
