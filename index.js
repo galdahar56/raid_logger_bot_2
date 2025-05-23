@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { google } = require('googleapis');
@@ -15,6 +14,8 @@ const auth = new google.auth.GoogleAuth({
 const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const eventCache = new Map();
+const claimedRolesPerMessage = new Map();
+const userClaimsPerMessage = new Map();
 
 client.on('ready', () => {
   console.log(`✅ Bot ready as ${client.user.tag}`);
@@ -26,6 +27,9 @@ client.on('messageCreate', async message => {
 
   const embed = message.embeds[0];
   if (!embed) return;
+
+  const title = embed.title || "";
+  if (!title.includes("Raid Organizer")) return;
 
   let dungeon = "Unknown";
   let eventTime = "Unknown";
@@ -39,23 +43,18 @@ client.on('messageCreate', async message => {
     if (dateMatch) {
       const rawDate = dateMatch[1].replace(/[*_`~]/g, '').trim();
       const parsedDate = new Date(rawDate);
-      if (!isNaN(parsedDate)) {
-        eventTime = parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
-      } else {
-        eventTime = rawDate;
-      }
+      eventTime = !isNaN(parsedDate)
+        ? parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' })
+        : rawDate;
     }
 
     const runIdMatch = embed.description.match(/Run\s*ID[:\-]?\s*(.+)/i);
     if (runIdMatch) runId = runIdMatch[1].replace(/[*_`~]/g, '').trim();
   }
 
-  eventCache.set(message.id, {
-    dungeon,
-    runId,
-    eventTime,
-    rolesUsed: {}
-  });
+  eventCache.set(message.id, { dungeon, runId, eventTime });
+  claimedRolesPerMessage.set(message.id, {});
+  userClaimsPerMessage.set(message.id, {});
 
   const trackerEmbed = new EmbedBuilder()
     .setTitle('📥 Sign-Up Tracker')
@@ -66,7 +65,8 @@ client.on('messageCreate', async message => {
     new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`signup_dps1_${message.id}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`undo_${message.id}`).setLabel('↩ Undo').setStyle(ButtonStyle.Danger)
   );
 
   await message.channel.send({ embeds: [trackerEmbed], components: [row] });
@@ -74,57 +74,137 @@ client.on('messageCreate', async message => {
 
 client.on('interactionCreate', async interaction => {
   if (!interaction.isButton()) return;
+  const parts = interaction.customId.split('_');
+  const action = parts[0];
 
-  const [action, role, messageId] = interaction.customId.split('_');
-  if (action !== 'signup') return;
+  if (action === 'signup') {
+    const role = parts[1];
+    const messageId = parts[2];
 
-  const event = eventCache.get(messageId);
-  if (!event) {
-    await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
-    return;
-  }
+    const username = interaction.user.tag;
+    const userId = interaction.user.id;
+    const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
 
-  if (event.rolesUsed[role]) {
-    await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
-    return;
-  }
+    const eventInfo = eventCache.get(messageId) || { dungeon: "Unknown", runId: "N/A", eventTime: "Unknown" };
+    const roleClaims = claimedRolesPerMessage.get(messageId) || {};
+    const userClaims = userClaimsPerMessage.get(messageId) || {};
 
-  const username = interaction.user.tag;
-  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
-
-  event.rolesUsed[role] = username;
-
-  const authClient = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: authClient });
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: 'Signup Log!A:F',
-    valueInputOption: 'USER_ENTERED',
-    resource: {
-      values: [[username, role.toUpperCase(), event.dungeon, event.runId, event.eventTime, timestamp]]
+    if (userClaims[userId]) {
+      return interaction.reply({ content: '❌ You already picked a role!', ephemeral: true });
     }
-  });
 
-  try {
-    const originalMessage = await interaction.channel.messages.fetch(messageId);
-    const oldRow = originalMessage.components[0];
+    if (roleClaims[role]) {
+      return interaction.reply({ content: '❌ This role is already taken!', ephemeral: true });
+    }
 
-    const newRow = new ActionRowBuilder().addComponents(
-      oldRow.components.map(button => {
-        if (button.customId === interaction.customId) {
-          return ButtonBuilder.from(button).setDisabled(true);
-        }
-        return button;
-      })
+    roleClaims[role] = username;
+    userClaims[userId] = role;
+    claimedRolesPerMessage.set(messageId, roleClaims);
+    userClaimsPerMessage.set(messageId, userClaims);
+
+    const authClient = await auth.getClient();
+    const sheets = google.sheets({ version: 'v4', auth: authClient });
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: 'Signup Log!A:F',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[username, role.toUpperCase(), eventInfo.dungeon, eventInfo.runId, eventInfo.eventTime, timestamp]]
+      }
+    });
+
+    await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
+
+    try {
+      const originalMessage = await interaction.channel.messages.fetch(messageId);
+      const oldRow = originalMessage.components[0];
+
+      const newRow = new ActionRowBuilder().addComponents(
+        oldRow.components.map(button => {
+          if (button.customId === interaction.customId) {
+            return ButtonBuilder.from(button).setDisabled(true);
+          }
+          return button;
+        })
+      );
+
+      await originalMessage.edit({ components: [newRow] });
+    } catch (err) {
+      console.error('Failed to disable button:', err);
+    }
+  } else if (action === 'undo') {
+    const messageId = parts[1];
+    const userId = interaction.user.id;
+    const username = interaction.user.tag;
+
+    const roleClaims = claimedRolesPerMessage.get(messageId);
+    const userClaims = userClaimsPerMessage.get(messageId);
+
+    if (!roleClaims || !userClaims || !userClaims[userId]) {
+      return interaction.reply({ content: '⚠️ You have not signed up for this event.', ephemeral: true });
+    }
+
+    const role = userClaims[userId];
+
+    delete roleClaims[role];
+    delete userClaims[userId];
+
+    claimedRolesPerMessage.set(messageId, roleClaims);
+    userClaimsPerMessage.set(messageId, userClaims);
+
+    const authClient = await auth.getClient();
+    const sheets = google.sheets({ version: 'v4', auth: authClient });
+    const sheet = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Signup Log!A:F'
+    });
+
+    const rows = sheet.data.values || [];
+    const rowIndex = rows.findIndex(row =>
+      row[0] === username &&
+      row[1] === role.toUpperCase() &&
+      row[3] === eventCache.get(messageId)?.runId
     );
 
-    await originalMessage.edit({ components: [newRow] });
-  } catch (err) {
-    console.error('Failed to disable button:', err);
-  }
+    if (rowIndex !== -1) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SHEET_ID,
+        resource: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: 0,
+                dimension: 'ROWS',
+                startIndex: rowIndex,
+                endIndex: rowIndex + 1
+              }
+            }
+          }]
+        }
+      });
+    }
 
-  await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
+    try {
+      const originalMessage = await interaction.channel.messages.fetch(messageId);
+      const oldRow = originalMessage.components[0];
+
+      const newRow = new ActionRowBuilder().addComponents(
+        oldRow.components.map(button => {
+          if (button.customId === `signup_${role}_${messageId}`) {
+            return ButtonBuilder.from(button).setDisabled(false);
+          }
+          return button;
+        })
+      );
+
+      await originalMessage.edit({ components: [newRow] });
+    } catch (err) {
+      console.error('Failed to re-enable button:', err);
+    }
+
+    return interaction.reply({ content: `↩ You have been removed from the **${role.toUpperCase()}** role.`, ephemeral: true });
+  }
 });
 
 client.login(process.env.DISCORD_TOKEN);
