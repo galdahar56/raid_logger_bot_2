@@ -15,8 +15,6 @@ const auth = new google.auth.GoogleAuth({
 const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const eventCache = new Map();
-const claimedRolesPerMessage = new Map(); // messageId => { role: username }
-const userClaimsPerMessage = new Map();   // messageId => { userId: role }
 
 client.on('ready', () => {
   console.log(`✅ Bot ready as ${client.user.tag}`);
@@ -41,18 +39,23 @@ client.on('messageCreate', async message => {
     if (dateMatch) {
       const rawDate = dateMatch[1].replace(/[*_`~]/g, '').trim();
       const parsedDate = new Date(rawDate);
-      eventTime = !isNaN(parsedDate)
-        ? parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' })
-        : rawDate;
+      if (!isNaN(parsedDate)) {
+        eventTime = parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
+      } else {
+        eventTime = rawDate;
+      }
     }
 
     const runIdMatch = embed.description.match(/Run\s*ID[:\-]?\s*(.+)/i);
     if (runIdMatch) runId = runIdMatch[1].replace(/[*_`~]/g, '').trim();
   }
 
-  eventCache.set(message.id, { dungeon, runId, eventTime });
-  claimedRolesPerMessage.set(message.id, {});
-  userClaimsPerMessage.set(message.id, {});
+  eventCache.set(message.id, {
+    dungeon,
+    runId,
+    eventTime,
+    rolesUsed: {}
+  });
 
   const trackerEmbed = new EmbedBuilder()
     .setTitle('📥 Sign-Up Tracker')
@@ -71,30 +74,25 @@ client.on('messageCreate', async message => {
 
 client.on('interactionCreate', async interaction => {
   if (!interaction.isButton()) return;
+
   const [action, role, messageId] = interaction.customId.split('_');
   if (action !== 'signup') return;
 
+  const event = eventCache.get(messageId);
+  if (!event) {
+    await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
+    return;
+  }
+
+  if (event.rolesUsed[role]) {
+    await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
+    return;
+  }
+
   const username = interaction.user.tag;
-  const userId = interaction.user.id;
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
 
-  const eventInfo = eventCache.get(messageId) || { dungeon: "Unknown", runId: "N/A", eventTime: "Unknown" };
-  const roleClaims = claimedRolesPerMessage.get(messageId) || {};
-  const userClaims = userClaimsPerMessage.get(messageId) || {};
-
-  if (userClaims[userId]) {
-    return interaction.reply({ content: '❌ You already picked a role!', ephemeral: true });
-  }
-
-  if (roleClaims[role]) {
-    return interaction.reply({ content: '❌ This role is already taken!', ephemeral: true });
-  }
-
-  // Store claim
-  roleClaims[role] = username;
-  userClaims[userId] = role;
-  claimedRolesPerMessage.set(messageId, roleClaims);
-  userClaimsPerMessage.set(messageId, userClaims);
+  event.rolesUsed[role] = username;
 
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
@@ -104,9 +102,27 @@ client.on('interactionCreate', async interaction => {
     range: 'Signup Log!A:F',
     valueInputOption: 'USER_ENTERED',
     resource: {
-      values: [[username, role.toUpperCase(), eventInfo.dungeon, eventInfo.runId, eventInfo.eventTime, timestamp]]
+      values: [[username, role.toUpperCase(), event.dungeon, event.runId, event.eventTime, timestamp]]
     }
   });
+
+  try {
+    const originalMessage = await interaction.channel.messages.fetch(messageId);
+    const oldRow = originalMessage.components[0];
+
+    const newRow = new ActionRowBuilder().addComponents(
+      oldRow.components.map(button => {
+        if (button.customId === interaction.customId) {
+          return ButtonBuilder.from(button).setDisabled(true);
+        }
+        return button;
+      })
+    );
+
+    await originalMessage.edit({ components: [newRow] });
+  } catch (err) {
+    console.error('Failed to disable button:', err);
+  }
 
   await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
 });
