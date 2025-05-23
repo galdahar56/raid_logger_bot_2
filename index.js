@@ -1,59 +1,62 @@
 
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
-const { google } = require('googleapis');
+const { Client, GatewayIntentBits, ButtonBuilder, ButtonStyle, ActionRowBuilder, Events } = require('discord.js');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(process.env.GOOGLE_SERVICE_JSON),
-  scopes: ['https://www.googleapis.com/auth/spreadsheets']
-});
-
-const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
+const TOKEN = process.env.DISCORD_TOKEN;
 
 const claimedRoles = new Map(); // roleName => userId
 const userSelections = new Set(); // userId
 
-client.once('ready', () => {
-  console.log(`✅ Bot ready as ${client.user.tag}`);
+client.once('ready', async () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
+
+  const channel = await client.channels.fetch(CHANNEL_ID);
+  if (!channel) {
+    console.error("❌ Channel not found. Check DISCORD_CHANNEL_ID in .env.");
+    return;
+  }
+
+  const row = createButtons();
+  await channel.send({
+    content: "🎮 Select your role (one per user, one user per role):",
+    components: row
+  });
 });
 
-client.on('interactionCreate', async interaction => {
+client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
 
   const userId = interaction.user.id;
-  const role = interaction.customId; // e.g., "tank", "healer", etc.
+  const role = interaction.customId;
 
   if (userSelections.has(userId)) {
-    await interaction.reply({ content: "❌ You’ve already selected a role. You can't choose another.", ephemeral: true });
+    await interaction.reply({ content: "❌ You’ve already selected a role.", ephemeral: true });
     return;
   }
 
   if (claimedRoles.has(role)) {
-    await interaction.reply({ content: `❌ That role is already taken by <@${claimedRoles.get(role)}>`, ephemeral: true });
+    await interaction.reply({ content: `❌ ${role} is already taken by <@${claimedRoles.get(role)}>`, ephemeral: true });
     return;
   }
 
-  // Save their selection
   userSelections.add(userId);
   claimedRoles.set(role, userId);
 
-  // Update the message with new buttons
   const updatedButtons = createButtons();
 
   await interaction.update({
-    content: `✅ <@${userId}> has claimed the **${role}** role!`,
+    content: `✅ <@${userId}> has claimed **${role}**.`,
     components: updatedButtons
   });
 });
 
 function createButtons() {
   const roles = ['tank', 'healer', 'dps1', 'dps2'];
-
   const row = new ActionRowBuilder();
 
   for (const role of roles) {
@@ -71,4 +74,4 @@ function createButtons() {
   return [row];
 }
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(TOKEN);
