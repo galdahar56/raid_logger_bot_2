@@ -84,13 +84,6 @@ client.on('interactionCreate', async interaction => {
     return;
   }
 
-  // Prevent user from signing up for multiple roles
-  if (Object.values(event.rolesUsed).includes(interaction.user.tag)) {
-    await interaction.reply({ content: '❌ You have already signed up for a role in this event.', ephemeral: true });
-    return;
-  }
-
-  // Prevent role from being claimed by multiple users
   if (event.rolesUsed[role]) {
     await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
     return;
@@ -115,11 +108,7 @@ client.on('interactionCreate', async interaction => {
 
   try {
     const originalMessage = await interaction.channel.messages.fetch(messageId);
-    const oldRow = originalMessage.components?.[0];
-    if (!oldRow) {
-      console.error('❌ No components found in original message.');
-      return;
-    }
+    const oldRow = originalMessage.components[0];
 
     const newRow = new ActionRowBuilder().addComponents(
       oldRow.components.map(button => {
