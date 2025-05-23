@@ -65,4 +65,22 @@ client.on('messageCreate', async message => {
   const runIdMatch = description.match(/Run\s*ID[:\-]?\s*(.+)/i);
   if (runIdMatch) runId = runIdMatch[1].replace(/[*_`~]/g, '').trim();
 
-  eventCache.set(message.id, { dungeon, runId, ev
+  eventCache.set(message.id, { dungeon, runId, eventTime });
+  claimedRolesPerMessage.set(message.id, {});
+  userClaimsPerMessage.set(message.id, {});
+
+  const trackerEmbed = new EmbedBuilder()
+    .setTitle('📥 Sign-Up Tracker')
+    .setDescription('Click your role to be logged in the signup sheet for this event.')
+    .setColor(0x00AE86);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`signup_dps1_${message.id}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`undo_${message.id}`).setLabel('↩ Undo').setStyle(ButtonStyle.Danger)
+  );
+
+  await message.channel.send({ embeds: [trackerEmbed], components: [row] });
+});
