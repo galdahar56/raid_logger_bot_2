@@ -12,20 +12,20 @@ const TOKEN = process.env.DISCORD_TOKEN;
 const claimedRoles = new Map(); // roleName => userId
 const userSelections = new Set(); // userId
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-});
 
-client.on('messageCreate', async message => {
-  if (message.author.bot && message.channel.id === CHANNEL_ID && message.content.toLowerCase().includes("event starts")) {
-    console.log("📌 Event detected. Posting role selection buttons...");
-
-    const row = createButtons();
-    await message.channel.send({
-      content: "🎮 Select your role (one per user, one user per role):",
-      components: row
-    });
+  const channel = await client.channels.fetch(CHANNEL_ID);
+  if (!channel) {
+    console.error("❌ Channel not found. Check DISCORD_CHANNEL_ID in .env.");
+    return;
   }
+
+  const row = createButtons();
+  await channel.send({
+    content: "🎮 Select your role (one per user, one user per role):",
+    components: row
+  });
 });
 
 client.on(Events.InteractionCreate, async interaction => {
