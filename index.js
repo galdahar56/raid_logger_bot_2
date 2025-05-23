@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { google } = require('googleapis');
@@ -52,7 +53,8 @@ client.on('messageCreate', async message => {
   eventCache.set(message.id, {
     dungeon,
     runId,
-    eventTime
+    eventTime,
+    rolesUsed: {}
   });
 
   const trackerEmbed = new EmbedBuilder()
@@ -76,12 +78,21 @@ client.on('interactionCreate', async interaction => {
   const [action, role, messageId] = interaction.customId.split('_');
   if (action !== 'signup') return;
 
+  const event = eventCache.get(messageId);
+  if (!event) {
+    await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
+    return;
+  }
+
+  if (event.rolesUsed[role]) {
+    await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
+    return;
+  }
+
   const username = interaction.user.tag;
   const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
 
-  const eventInfo = eventCache.get(messageId) || {
-    dungeon: "Unknown", runId: "N/A", eventTime: "Unknown"
-  };
+  event.rolesUsed[role] = username;
 
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
@@ -91,9 +102,27 @@ client.on('interactionCreate', async interaction => {
     range: 'Signup Log!A:F',
     valueInputOption: 'USER_ENTERED',
     resource: {
-      values: [[username, role.toUpperCase(), eventInfo.dungeon, eventInfo.runId, eventInfo.eventTime, timestamp]]
+      values: [[username, role.toUpperCase(), event.dungeon, event.runId, event.eventTime, timestamp]]
     }
   });
+
+  try {
+    const originalMessage = await interaction.channel.messages.fetch(messageId);
+    const oldRow = originalMessage.components[0];
+
+    const newRow = new ActionRowBuilder().addComponents(
+      oldRow.components.map(button => {
+        if (button.customId === interaction.customId) {
+          return ButtonBuilder.from(button).setDisabled(true);
+        }
+        return button;
+      })
+    );
+
+    await originalMessage.edit({ components: [newRow] });
+  } catch (err) {
+    console.error('Failed to disable button:', err);
+  }
 
   await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
 });
