@@ -82,20 +82,67 @@ client.on('interactionCreate', async interaction => {
   const roleClaims = claimedRolesPerMessage.get(messageId) || {};
   const userClaims = userClaimsPerMessage.get(messageId) || {};
 
+  const authClient = await auth.getClient();
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
+
   if (action === 'undo') {
     const prevRole = userClaims[userId];
     if (!prevRole) {
       return interaction.reply({ content: '❌ You haven’t signed up yet.', ephemeral: true });
     }
 
+    // Clear memory
     delete userClaims[userId];
     delete roleClaims[prevRole];
     claimedRolesPerMessage.set(messageId, roleClaims);
     userClaimsPerMessage.set(messageId, userClaims);
 
+    // Delete row in sheet
+    try {
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: 'Signup Log!A2:F',
+      });
+
+      const rows = res.data.values || [];
+      const rowIndex = rows.findIndex(row =>
+        row[0] === username &&
+        row[1] === prevRole.toUpperCase() &&
+        row[2] === eventInfo.dungeon &&
+        row[3] === eventInfo.runId
+      );
+
+      if (rowIndex !== -1) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SHEET_ID,
+          requestBody: {
+            requests: [
+              {
+                deleteDimension: {
+                  range: {
+                    sheetId: 0, // assume Signup Log is first sheet; adjust if not
+                    dimension: "ROWS",
+                    startIndex: rowIndex + 1,
+                    endIndex: rowIndex + 2,
+                  }
+                }
+              }
+            ]
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Undo: Failed to delete row from Signup Log:', err);
+    }
+
+    // Re-enable button
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
-      const oldRow = originalMessage.components[0];
+      const oldRow = originalMessage.components?.[0];
+      if (!oldRow) {
+        console.error('❌ No components found in original message.');
+        return;
+      }
 
       const newRow = new ActionRowBuilder().addComponents(
         oldRow.components.map(button => {
@@ -129,9 +176,6 @@ client.on('interactionCreate', async interaction => {
   claimedRolesPerMessage.set(messageId, roleClaims);
   userClaimsPerMessage.set(messageId, userClaims);
 
-  const authClient = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: authClient });
-
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
     range: 'Signup Log!A:F',
@@ -143,7 +187,11 @@ client.on('interactionCreate', async interaction => {
 
   try {
     const originalMessage = await interaction.channel.messages.fetch(messageId);
-    const oldRow = originalMessage.components[0];
+    const oldRow = originalMessage.components?.[0];
+    if (!oldRow) {
+      console.error('❌ No components found in original message.');
+      return;
+    }
 
     const newRow = new ActionRowBuilder().addComponents(
       oldRow.components.map(button => {
