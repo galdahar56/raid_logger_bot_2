@@ -15,78 +15,100 @@ const auth = new google.auth.GoogleAuth({
 const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const eventCache = new Map();
-
-const roleButtons = [
-  { label: 'Tank', id: 'role_tank' },
-  { label: 'Healer', id: 'role_healer' },
-  { label: 'DPS 1', id: 'role_dps1' },
-  { label: 'DPS 2', id: 'role_dps2' }
-];
-
-const claimedRoles = new Map();
-const userClaims = new Map();
+const claimedRolesPerMessage = new Map(); // messageId => { role: username }
+const userClaimsPerMessage = new Map();   // messageId => { userId: role }
 
 client.on('ready', () => {
   console.log(`✅ Bot ready as ${client.user.tag}`);
 });
 
 client.on('messageCreate', async message => {
-  if (message.channelId !== CHANNEL_ID || !message.embeds.length) return;
-  const embedTitle = message.embeds[0].title || "";
-  if (!embedTitle.includes('Raid Organizer')) return;
+  if (message.author.id === client.user.id) return;
+  if (!message.author.bot || message.channel.id !== CHANNEL_ID) return;
 
-  if (eventCache.has(message.id)) return;
-  eventCache.set(message.id, true);
+  const embed = message.embeds[0];
+  if (!embed) return;
 
-  const row = new ActionRowBuilder()
-    .addComponents(
-      roleButtons.map(({ label, id }) =>
-        new ButtonBuilder()
-          .setCustomId(id)
-          .setLabel(label)
-          .setStyle(ButtonStyle.Primary)
-      )
-    );
+  let dungeon = "Unknown";
+  let eventTime = "Unknown";
+  let runId = "N/A";
 
-  await message.channel.send({
-    embeds: [new EmbedBuilder().setTitle('📌 Sign Up for a Role')],
-    components: [row]
-  });
+  if (embed.description) {
+    const dungeonMatch = embed.description.match(/Dungeon[:\-]?\s*(.+)/i);
+    if (dungeonMatch) dungeon = dungeonMatch[1].replace(/[*_`~]/g, '').trim();
+
+    const dateMatch = embed.description.match(/Date[:\-]?\s*(.+)/i);
+    if (dateMatch) {
+      const rawDate = dateMatch[1].replace(/[*_`~]/g, '').trim();
+      const parsedDate = new Date(rawDate);
+      eventTime = !isNaN(parsedDate)
+        ? parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' })
+        : rawDate;
+    }
+
+    const runIdMatch = embed.description.match(/Run\s*ID[:\-]?\s*(.+)/i);
+    if (runIdMatch) runId = runIdMatch[1].replace(/[*_`~]/g, '').trim();
+  }
+
+  eventCache.set(message.id, { dungeon, runId, eventTime });
+  claimedRolesPerMessage.set(message.id, {});
+  userClaimsPerMessage.set(message.id, {});
+
+  const trackerEmbed = new EmbedBuilder()
+    .setTitle('📥 Sign-Up Tracker')
+    .setDescription('Click your role to be logged in the signup sheet for this event.')
+    .setColor(0x00AE86);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`signup_dps1_${message.id}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary)
+  );
+
+  await message.channel.send({ embeds: [trackerEmbed], components: [row] });
 });
 
 client.on('interactionCreate', async interaction => {
   if (!interaction.isButton()) return;
+  const [action, role, messageId] = interaction.customId.split('_');
+  if (action !== 'signup') return;
 
-  const roleId = interaction.customId;
+  const username = interaction.user.tag;
   const userId = interaction.user.id;
+  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
 
-  if (userClaims.has(userId)) {
+  const eventInfo = eventCache.get(messageId) || { dungeon: "Unknown", runId: "N/A", eventTime: "Unknown" };
+  const roleClaims = claimedRolesPerMessage.get(messageId) || {};
+  const userClaims = userClaimsPerMessage.get(messageId) || {};
+
+  if (userClaims[userId]) {
     return interaction.reply({ content: '❌ You already picked a role!', ephemeral: true });
   }
 
-  if (claimedRoles.has(roleId)) {
+  if (roleClaims[role]) {
     return interaction.reply({ content: '❌ This role is already taken!', ephemeral: true });
   }
 
-  claimedRoles.set(roleId, interaction.user.username);
-  userClaims.set(userId, roleId);
+  // Store claim
+  roleClaims[role] = username;
+  userClaims[userId] = role;
+  claimedRolesPerMessage.set(messageId, roleClaims);
+  userClaimsPerMessage.set(messageId, userClaims);
 
-  const updatedRow = new ActionRowBuilder()
-    .addComponents(
-      roleButtons.map(({ label, id }) => 
-        new ButtonBuilder()
-          .setCustomId(id)
-          .setLabel(
-            claimedRoles.has(id) ? `${label} - ${claimedRoles.get(id)}` : label
-          )
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(claimedRoles.has(id))
-      )
-    );
+  const authClient = await auth.getClient();
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  await interaction.update({
-    components: [updatedRow]
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: 'Signup Log!A:F',
+    valueInputOption: 'USER_ENTERED',
+    resource: {
+      values: [[username, role.toUpperCase(), eventInfo.dungeon, eventInfo.runId, eventInfo.eventTime, timestamp]]
+    }
   });
+
+  await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
 });
 
 client.login(process.env.DISCORD_TOKEN);
