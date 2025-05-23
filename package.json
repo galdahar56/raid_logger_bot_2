@@ -22,4 +22,6 @@
   },
   "homepage": "https://github.com/galdahar56/raid-logger-bot#readme",
   "description": ""
+}"scripts": {
+  "start": "node index.js"
 }
