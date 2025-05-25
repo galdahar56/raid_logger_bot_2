@@ -66,7 +66,7 @@ client.on('messageCreate', async message => {
     new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`signup_dps1_${message.id}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`undo_${message.id}`).setLabel('↩ Undo Signup').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`undo_signup_${message.id}`).setLabel('↩ Undo Signup').setStyle(ButtonStyle.Danger)
   );
 
   await message.channel.send({ embeds: [trackerEmbed], components: [row] });
@@ -78,9 +78,14 @@ client.on('interactionCreate', async interaction => {
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  const [action, role, messageId] = interaction.customId.split('_');
-  const event = eventCache.get(messageId);
+  const parts = interaction.customId.split('_');
+  const action = parts[0];
+  const role = parts[1];
+  const messageId = parts[2];
   const username = interaction.user.tag;
+  const event = eventCache.get(messageId);
+
+  const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I' };
 
   if (action === 'signup') {
     if (!event) {
@@ -110,8 +115,7 @@ client.on('interactionCreate', async interaction => {
       }
     });
 
-    const roleColumns = { tank: 'E', healer: 'F', dps1: 'G', dps2: 'H' };
-    const scheduleData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Run_Schedule!A:H' });
+    const scheduleData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Run_Schedule!A:Z' });
     const runRow = scheduleData.data.values.findIndex(row => row[0] === event.runId);
     if (runRow !== -1 && roleColumns[role]) {
       const range = `Run_Schedule!${roleColumns[role]}${runRow + 1}`;
@@ -142,7 +146,9 @@ client.on('interactionCreate', async interaction => {
     }
 
     await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
-  } else if (action === 'undo') {
+  }
+
+  if (action === 'undo') {
     if (!event) {
       await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
       return;
@@ -167,8 +173,7 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
-    const roleColumns = { tank: 'E', healer: 'F', dps1: 'G', dps2: 'H' };
-    const scheduleData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Run_Schedule!A:H' });
+    const scheduleData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Run_Schedule!A:Z' });
     const runRow = scheduleData.data.values.findIndex(row => row[0] === event.runId);
     if (runRow !== -1 && roleColumns[userRole]) {
       const range = `Run_Schedule!${roleColumns[userRole]}${runRow + 1}`;
