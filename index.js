@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { google } = require('googleapis');
@@ -59,14 +58,15 @@ client.on('messageCreate', async message => {
 
   const trackerEmbed = new EmbedBuilder()
     .setTitle('📥 Sign-Up Tracker')
-    .setDescription('Click your role to be logged in the signup sheet for this event.')
+    .setDescription('Click your role to be logged in the signup sheet for this event. You can also undo.')
     .setColor(0x00AE86);
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`signup_dps1_${message.id}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`undo_${message.id}`).setLabel('↩ Undo Signup').setStyle(ButtonStyle.Danger)
   );
 
   await message.channel.send({ embeds: [trackerEmbed], components: [row] });
@@ -75,56 +75,131 @@ client.on('messageCreate', async message => {
 client.on('interactionCreate', async interaction => {
   if (!interaction.isButton()) return;
 
-  const [action, role, messageId] = interaction.customId.split('_');
-  if (action !== 'signup') return;
-
-  const event = eventCache.get(messageId);
-  if (!event) {
-    await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
-    return;
-  }
-
-  if (event.rolesUsed[role]) {
-    await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
-    return;
-  }
-
-  const username = interaction.user.tag;
-  const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
-
-  event.rolesUsed[role] = username;
-
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: 'Signup Log!A:F',
-    valueInputOption: 'USER_ENTERED',
-    resource: {
-      values: [[username, role.toUpperCase(), event.dungeon, event.runId, event.eventTime, timestamp]]
+  const [action, role, messageId] = interaction.customId.split('_');
+  const event = eventCache.get(messageId);
+  const username = interaction.user.tag;
+
+  if (action === 'signup') {
+    if (!event) {
+      await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
+      return;
     }
-  });
 
-  try {
-    const originalMessage = await interaction.channel.messages.fetch(messageId);
-    const oldRow = originalMessage.components[0];
+    if (Object.values(event.rolesUsed).includes(username)) {
+      await interaction.reply({ content: `❌ You’ve already signed up for this event.`, ephemeral: true });
+      return;
+    }
 
-    const newRow = new ActionRowBuilder().addComponents(
-      oldRow.components.map(button => {
-        if (button.customId === interaction.customId) {
-          return ButtonBuilder.from(button).setDisabled(true);
+    if (event.rolesUsed[role]) {
+      await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
+      return;
+    }
+
+    const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
+    event.rolesUsed[role] = username;
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: 'Signup Log!A:F',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[username, role.toUpperCase(), event.dungeon, event.runId, event.eventTime, timestamp]]
+      }
+    });
+
+    const roleColumns = { tank: 'E', healer: 'F', dps1: 'G', dps2: 'H' };
+    const scheduleData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Run_Schedule!A:H' });
+    const runRow = scheduleData.data.values.findIndex(row => row[0] === event.runId);
+    if (runRow !== -1 && roleColumns[role]) {
+      const range = `Run_Schedule!${roleColumns[role]}${runRow + 1}`;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [[username]] }
+      });
+    }
+
+    try {
+      const originalMessage = await interaction.channel.messages.fetch(messageId);
+      const oldRow = originalMessage.components[0];
+
+      const newRow = new ActionRowBuilder().addComponents(
+        oldRow.components.map(button => {
+          if (button.customId === interaction.customId) {
+            return ButtonBuilder.from(button).setDisabled(true);
+          }
+          return button;
+        })
+      );
+
+      await originalMessage.edit({ components: [newRow] });
+    } catch (err) {
+      console.error('Failed to disable button:', err);
+    }
+
+    await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
+  } else if (action === 'undo') {
+    if (!event) {
+      await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
+      return;
+    }
+
+    const userRole = Object.keys(event.rolesUsed).find(r => event.rolesUsed[r] === username);
+    if (!userRole) {
+      await interaction.reply({ content: `❌ You haven't signed up for this event.`, ephemeral: true });
+      return;
+    }
+
+    delete event.rolesUsed[userRole];
+
+    const signupData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Signup Log!A:F' });
+    const rowIndex = signupData.data.values.findIndex(row => row[0] === username && row[1] === userRole.toUpperCase() && row[3] === event.runId);
+    if (rowIndex !== -1) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SHEET_ID,
+        requestBody: {
+          requests: [{ deleteDimension: { range: { sheetId: 0, dimension: 'ROWS', startIndex: rowIndex + 1, endIndex: rowIndex + 2 } } }]
         }
-        return button;
-      })
-    );
+      });
+    }
 
-    await originalMessage.edit({ components: [newRow] });
-  } catch (err) {
-    console.error('Failed to disable button:', err);
+    const roleColumns = { tank: 'E', healer: 'F', dps1: 'G', dps2: 'H' };
+    const scheduleData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Run_Schedule!A:H' });
+    const runRow = scheduleData.data.values.findIndex(row => row[0] === event.runId);
+    if (runRow !== -1 && roleColumns[userRole]) {
+      const range = `Run_Schedule!${roleColumns[userRole]}${runRow + 1}`;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [['']] }
+      });
+    }
+
+    try {
+      const originalMessage = await interaction.channel.messages.fetch(messageId);
+      const oldRow = originalMessage.components[0];
+
+      const newRow = new ActionRowBuilder().addComponents(
+        oldRow.components.map(button => {
+          if (button.customId.includes(`signup_${userRole}_`)) {
+            return ButtonBuilder.from(button).setDisabled(false);
+          }
+          return button;
+        })
+      );
+
+      await originalMessage.edit({ components: [newRow] });
+    } catch (err) {
+      console.error('Failed to re-enable button:', err);
+    }
+
+    await interaction.reply({ content: `❌ Your signup for **${userRole.toUpperCase()}** has been removed.`, ephemeral: true });
   }
-
-  await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
 });
 
 client.login(process.env.DISCORD_TOKEN);
