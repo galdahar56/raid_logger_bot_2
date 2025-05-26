@@ -140,9 +140,10 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    if (Object.values(event.rolesUsed).includes(username)) {
-      if (role === 'keyholder') {
-        const alreadyHasKey = event.rolesUsed['keyholder'] === username;
+    // TEST MODE: Bypassing duplicate role check for testing group formation
+// if (Object.values(event.rolesUsed).includes(username)) {
+//   ... original role check skipped
+// }        const alreadyHasKey = event.rolesUsed['keyholder'] === username;
         if (alreadyHasKey) {
           await interaction.reply({ content: `❌ You’ve already claimed the Key Holder role.`, ephemeral: true });
           return;
