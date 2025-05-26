@@ -136,7 +136,7 @@ client.on('interactionCreate', async interaction => {
   const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'K' };
 
   if (action === 'signup') {
-    if (role === 'keyholder && !testerBypass') {
+    if (role === 'keyholder' && !testerBypass) {
       const hasMainRole = ['tank', 'healer', 'dps1', 'dps2'].some(r => event.rolesUsed[r] === username);
       if (!hasMainRole) {
         await interaction.reply({ content: '❌ You must sign up for Tank, Healer, or DPS first before claiming Key Holder.', ephemeral: true });
@@ -187,7 +187,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     try {
-      const originalMessage = await interaction.channel.messages.fetch(event.trackerMessageId);
+      const originalMessage = await interaction.channel.messages.fetch(MessageId);
       const oldRows = originalMessage.components;
 
       const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
