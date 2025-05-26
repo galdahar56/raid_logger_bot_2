@@ -77,7 +77,7 @@ client.on('messageCreate', async message => {
     rolesUsed: {},
     trackerMessageId: trackerMessage.id
   });
-  
+
 });
 
 client.on('interactionCreate', async interaction => {
@@ -91,6 +91,7 @@ client.on('interactionCreate', async interaction => {
   const role = parts[1];
   const messageId = parts[2];
   const username = interaction.user.tag;
+  const testerBypass = interaction.user.id === '774277998936457247'; // Replace with your actual user ID
   let event = eventCache.get(messageId);
 
   if (!event) {
@@ -135,7 +136,7 @@ client.on('interactionCreate', async interaction => {
   const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'K' };
 
   if (action === 'signup') {
-    if (role === 'keyholder') {
+    if (role === 'keyholder && !testerBypass') {
       const hasMainRole = ['tank', 'healer', 'dps1', 'dps2'].some(r => event.rolesUsed[r] === username);
       if (!hasMainRole) {
         await interaction.reply({ content: '❌ You must sign up for Tank, Healer, or DPS first before claiming Key Holder.', ephemeral: true });
@@ -143,7 +144,7 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    if (Object.values(event.rolesUsed).includes(username)) {
+    if (!testerBypass && Object.values(event.rolesUsed).includes(username)) {
       if (role === 'keyholder') {
         const alreadyHasKey = event.rolesUsed['keyholder'] === username;
         if (alreadyHasKey) {
@@ -156,7 +157,7 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    if (event.rolesUsed[role]) {
+    if (!testerBypass && event.rolesUsed[role]) {
       await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
       return;
     }
