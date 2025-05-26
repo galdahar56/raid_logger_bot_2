@@ -132,7 +132,7 @@ client.on('interactionCreate', async interaction => {
   const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'K' };
 
   if (action === 'signup') {
-    if (role === 'keyholder') {
+    if (role === 'keyholder' && !testerBypass) {
       const hasMainRole = ['tank', 'healer', 'dps1', 'dps2'].some(r => event.rolesUsed[r] === username);
       if (!hasMainRole) {
         await interaction.reply({ content: '❌ You must sign up for Tank, Healer, or DPS first before claiming Key Holder.', ephemeral: true });
@@ -140,10 +140,12 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    // TEST MODE: Bypassing duplicate role check for testing group formation
-// if (Object.values(event.rolesUsed).includes(username)) {
-//   ... original role check skipped
-// }        const alreadyHasKey = event.rolesUsed['keyholder'] === username;
+    const testerBypass = interaction.user.id === 'smote81'; // 👈 Replace this
+
+    if (!testerBypass && Object.values(event.rolesUsed).includes(username)) {
+
+      if (role === 'keyholder') {
+        const alreadyHasKey = event.rolesUsed['keyholder'] === username;
         if (alreadyHasKey) {
           await interaction.reply({ content: `❌ You’ve already claimed the Key Holder role.`, ephemeral: true });
           return;
@@ -154,10 +156,11 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    if (event.rolesUsed[role]) {
+    if (!testerBypass && event.rolesUsed[role]) {
       await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
       return;
     }
+
 
     const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
     event.rolesUsed[role] = username;
