@@ -65,16 +65,12 @@ client.on('messageCreate', async message => {
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`signup_dps1_${message.id}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`signup_keyholder_${message.id}`).setLabel('🗝 Key').setStyle(ButtonStyle.Success)
-  );
-
-  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`signup_dps_${message.id}`).setLabel('⚔ DPS').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`signup_keyholder_${message.id}`).setLabel('🗝 Key').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`undo_signup_${message.id}`).setLabel('↩ Undo').setStyle(ButtonStyle.Danger)
   );
 
-  await message.channel.send({ embeds: [trackerEmbed], components: [row1, row2] });
+  await message.channel.send({ embeds: [trackerEmbed], components: [row1] });
 });
 
 client.on('interactionCreate', async interaction => {
@@ -85,7 +81,7 @@ client.on('interactionCreate', async interaction => {
 
   const parts = interaction.customId.split('_');
   const action = parts[0];
-  const role = parts[1];
+  let role = parts[1];
   const messageId = parts[2];
   const username = interaction.user.tag;
   const event = eventCache.get(messageId);
@@ -101,6 +97,18 @@ client.on('interactionCreate', async interaction => {
     if (Object.values(event.rolesUsed).includes(username)) {
       await interaction.reply({ content: `❌ You’ve already signed up for this event.`, ephemeral: true });
       return;
+    }
+
+    // Handle combined DPS logic
+    if (role === 'dps') {
+      if (!event.rolesUsed.dps1) {
+        role = 'dps1';
+      } else if (!event.rolesUsed.dps2) {
+        role = 'dps2';
+      } else {
+        await interaction.reply({ content: `❌ Both DPS slots are already filled.`, ephemeral: true });
+        return;
+      }
     }
 
     if (event.rolesUsed[role]) {
@@ -134,18 +142,22 @@ client.on('interactionCreate', async interaction => {
 
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
-      const oldRows = originalMessage.components;
+      const oldRow = originalMessage.components[0];
 
-      const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
-        row.components.map(button => {
-          if (button.customId === interaction.customId) {
+      const newRow = new ActionRowBuilder().addComponents(
+        oldRow.components.map(button => {
+          if (button.customId === `signup_dps_${messageId}` &&
+              event.rolesUsed.dps1 && event.rolesUsed.dps2) {
+            return ButtonBuilder.from(button).setDisabled(true);
+          }
+          if (button.customId === interaction.customId && button.customId !== `signup_dps_${messageId}`) {
             return ButtonBuilder.from(button).setDisabled(true);
           }
           return button;
         })
-      ));
+      );
 
-      await originalMessage.edit({ components: newRows });
+      await originalMessage.edit({ components: [newRow] });
     } catch (err) {
       console.error('Failed to disable button:', err);
     }
@@ -192,18 +204,19 @@ client.on('interactionCreate', async interaction => {
 
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
-      const oldRows = originalMessage.components;
+      const oldRow = originalMessage.components[0];
 
-      const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
-        row.components.map(button => {
-          if (button.customId.includes(`signup_${userRole}_`)) {
+      const newRow = new ActionRowBuilder().addComponents(
+        oldRow.components.map(button => {
+          if (button.customId === `signup_dps_${messageId}` ||
+              button.customId.includes(`signup_${userRole}_`)) {
             return ButtonBuilder.from(button).setDisabled(false);
           }
           return button;
         })
-      ));
+      );
 
-      await originalMessage.edit({ components: newRows });
+      await originalMessage.edit({ components: [newRow] });
     } catch (err) {
       console.error('Failed to re-enable button:', err);
     }
