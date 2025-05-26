@@ -15,8 +15,6 @@ const auth = new google.auth.GoogleAuth({
 const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const eventCache = new Map();
-const SUPER_USERS = ['774277998936457247E'];  // Discord user ID
-const isSuperUser = (userId) => SUPER_USERS.includes(userId);
 const pendingFilledMessages = new Map();
 
 client.on('ready', () => {
@@ -94,6 +92,12 @@ client.on('interactionCreate', async interaction => {
 if (!event) {
   try {
     const originalMessage = await interaction.channel.messages.fetch(messageId);
+
+  if (originalMessage.author.id !== client.user.id) {
+    console.warn('⚠️ Cannot edit a message not authored by this bot.');
+    return;
+  }
+
     const embed = originalMessage.embeds[0];
 
     if (!embed || !embed.description) {
@@ -147,7 +151,7 @@ if (!event) {
       }
     }
 
-    if (Object.values(event.rolesUsed).includes(username) && !isSuperUser(interaction.user.id)) {
+    if (Object.values(event.rolesUsed).includes(username)) {
       if (role === 'keyholder') {
         const alreadyHasKey = event.rolesUsed['keyholder'] === username;
         if (alreadyHasKey) {
@@ -165,11 +169,10 @@ if (!event) {
       }
     }
 
-    if (event.rolesUsed[role] && !isSuperUser(interaction.user.id)) {
-  await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
-  return;
-}
-
+    if (event.rolesUsed[role]) {
+      await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
+      return;
+    }
 
     const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
     event.rolesUsed[role] = username;
@@ -246,6 +249,12 @@ if (allRolesFilled) {
 
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
+
+  if (originalMessage.author.id !== client.user.id) {
+    console.warn('⚠️ Cannot edit a message not authored by this bot.');
+    return;
+  }
+
       const oldRows = originalMessage.components;
 
       const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
@@ -309,6 +318,12 @@ if (pendingFilledMessages.has(event.runId)) {
 
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
+
+  if (originalMessage.author.id !== client.user.id) {
+    console.warn('⚠️ Cannot edit a message not authored by this bot.');
+    return;
+  }
+
       const oldRows = originalMessage.components;
 
       const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
