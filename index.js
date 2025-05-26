@@ -15,6 +15,8 @@ const auth = new google.auth.GoogleAuth({
 const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const eventCache = new Map();
+const SUPER_USERS = ['774277998936457247E'];  // Discord user ID
+const isSuperUser = (userId) => SUPER_USERS.includes(userId);
 const pendingFilledMessages = new Map();
 
 client.on('ready', () => {
@@ -145,7 +147,7 @@ if (!event) {
       }
     }
 
-    if (Object.values(event.rolesUsed).includes(username)) {
+    if (Object.values(event.rolesUsed).includes(username) && !isSuperUser(interaction.user.id)) {
       if (role === 'keyholder') {
         const alreadyHasKey = event.rolesUsed['keyholder'] === username;
         if (alreadyHasKey) {
@@ -163,10 +165,11 @@ if (!event) {
       }
     }
 
-    if (event.rolesUsed[role]) {
-      await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
-      return;
-    }
+    if (event.rolesUsed[role] && !isSuperUser(interaction.user.id)) {
+  await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
+  return;
+}
+
 
     const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
     event.rolesUsed[role] = username;
