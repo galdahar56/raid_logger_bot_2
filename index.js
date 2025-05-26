@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { google } = require('googleapis');
@@ -61,15 +62,19 @@ client.on('messageCreate', async message => {
     .setDescription('Click your role to be logged in the signup sheet for this event. You can also undo.')
     .setColor(0x00AE86);
 
-  const row = new ActionRowBuilder().addComponents(
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`signup_dps1_${message.id}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`undo_signup_${message.id}`).setLabel('↩ Undo Signup').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`signup_keyholder_${message.id}`).setLabel('🗝 Key').setStyle(ButtonStyle.Success)
   );
 
-  await message.channel.send({ embeds: [trackerEmbed], components: [row] });
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`undo_signup_${message.id}`).setLabel('↩ Undo').setStyle(ButtonStyle.Danger)
+  );
+
+  await message.channel.send({ embeds: [trackerEmbed], components: [row1, row2] });
 });
 
 client.on('interactionCreate', async interaction => {
@@ -85,7 +90,7 @@ client.on('interactionCreate', async interaction => {
   const username = interaction.user.tag;
   const event = eventCache.get(messageId);
 
-  const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I' };
+  const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'K' };
 
   if (action === 'signup') {
     if (!event) {
@@ -129,18 +134,18 @@ client.on('interactionCreate', async interaction => {
 
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
-      const oldRow = originalMessage.components[0];
+      const oldRows = originalMessage.components;
 
-      const newRow = new ActionRowBuilder().addComponents(
-        oldRow.components.map(button => {
+      const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
+        row.components.map(button => {
           if (button.customId === interaction.customId) {
             return ButtonBuilder.from(button).setDisabled(true);
           }
           return button;
         })
-      );
+      ));
 
-      await originalMessage.edit({ components: [newRow] });
+      await originalMessage.edit({ components: newRows });
     } catch (err) {
       console.error('Failed to disable button:', err);
     }
@@ -187,18 +192,18 @@ client.on('interactionCreate', async interaction => {
 
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
-      const oldRow = originalMessage.components[0];
+      const oldRows = originalMessage.components;
 
-      const newRow = new ActionRowBuilder().addComponents(
-        oldRow.components.map(button => {
+      const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
+        row.components.map(button => {
           if (button.customId.includes(`signup_${userRole}_`)) {
             return ButtonBuilder.from(button).setDisabled(false);
           }
           return button;
         })
-      );
+      ));
 
-      await originalMessage.edit({ components: [newRow] });
+      await originalMessage.edit({ components: newRows });
     } catch (err) {
       console.error('Failed to re-enable button:', err);
     }
