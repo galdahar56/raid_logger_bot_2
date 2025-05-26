@@ -50,12 +50,17 @@ client.on('messageCreate', async message => {
     if (runIdMatch) runId = runIdMatch[1].replace(/[*_`~]/g, '').trim();
   }
 
+  const trackerMessage = await message.channel.send({ embeds: [trackerEmbed], components: [row1, row2] });
+
   eventCache.set(message.id, {
     dungeon,
     runId,
     eventTime,
-    rolesUsed: {}
+    rolesUsed: {},
+    trackerMessageId: trackerMessage.id
   });
+
+  return;
 
   const trackerEmbed = new EmbedBuilder()
     .setTitle('📥 Sign-Up Tracker')
@@ -92,7 +97,7 @@ client.on('interactionCreate', async interaction => {
 
   if (!event) {
     try {
-      const originalMessage = await interaction.channel.messages.fetch(messageId);
+      const originalMessage = await interaction.channel.messages.fetch(event.trackerMessageId);
       const embed = originalMessage.embeds[0];
 
       if (!embed || !embed.description) {
@@ -132,7 +137,7 @@ client.on('interactionCreate', async interaction => {
   const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'K' };
 
   if (action === 'signup') {
-    if (role === 'keyholder' && !testerBypass) {
+    if (role === 'keyholder') {
       const hasMainRole = ['tank', 'healer', 'dps1', 'dps2'].some(r => event.rolesUsed[r] === username);
       if (!hasMainRole) {
         await interaction.reply({ content: '❌ You must sign up for Tank, Healer, or DPS first before claiming Key Holder.', ephemeral: true });
@@ -140,10 +145,7 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    const testerBypass = interaction.user.id === '774277998936457247'; // 👈 Replace this
-
-    if (!testerBypass && Object.values(event.rolesUsed).includes(username)) {
-
+    if (Object.values(event.rolesUsed).includes(username)) {
       if (role === 'keyholder') {
         const alreadyHasKey = event.rolesUsed['keyholder'] === username;
         if (alreadyHasKey) {
@@ -156,7 +158,7 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    if (!testerBypass && event.rolesUsed[role]) {
+    if (event.rolesUsed[role]) {
       await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
       return;
     }
@@ -186,7 +188,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     try {
-      const originalMessage = await interaction.channel.messages.fetch(messageId);
+      const originalMessage = await interaction.channel.messages.fetch(event.trackerMessageId);
       const oldRows = originalMessage.components;
 
       const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
@@ -288,7 +290,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     try {
-      const originalMessage = await interaction.channel.messages.fetch(messageId);
+      const originalMessage = await interaction.channel.messages.fetch(event.trackerMessageId);
       const oldRows = originalMessage.components;
 
       const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
