@@ -140,7 +140,7 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    const testerBypass = interaction.user.id === 'smote81'; // 👈 Replace this
+    const testerBypass = interaction.user.id === '774277998936457247'; // 👈 Replace this
 
     if (!testerBypass && Object.values(event.rolesUsed).includes(username)) {
 
@@ -160,7 +160,6 @@ client.on('interactionCreate', async interaction => {
       await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
       return;
     }
-
 
     const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
     event.rolesUsed[role] = username;
