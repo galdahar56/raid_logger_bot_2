@@ -151,7 +151,7 @@ if (!event) {
       }
     }
 
-    if (Object.values(event.rolesUsed).includes(username)) {
+    if (Object.values(event.rolesUsed).includes(username) && !SUPER_USERS.includes(interaction.user.id)) {
       if (role === 'keyholder') {
         const alreadyHasKey = event.rolesUsed['keyholder'] === username;
         if (alreadyHasKey) {
@@ -169,7 +169,7 @@ if (!event) {
       }
     }
 
-    if (event.rolesUsed[role]) {
+    if (event.rolesUsed[role] && !SUPER_USERS.includes(interaction.user.id)) {
       await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
       return;
     }
