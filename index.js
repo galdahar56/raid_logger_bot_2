@@ -212,7 +212,7 @@ client.on('interactionCreate', async interaction => {
       try {
         const responseData = await sheets.spreadsheets.values.get({
           spreadsheetId: SHEET_ID,
-          range: 'Form Response 1!A:Z'
+          range: 'Form Responses 1!A:Z'
         });
 
         const headers = responseData.data.values[0];
