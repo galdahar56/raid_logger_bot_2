@@ -55,6 +55,18 @@ client.on('messageCreate', async message => {
     .setDescription('Click your role to be logged in the signup sheet for this event. You can also undo.')
     .setColor(0x00AE86);
 
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`signup_dps1_${message.id}`).setLabel('⚔ DPS 1').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`signup_dps2_${message.id}`).setLabel('⚔ DPS 2').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`signup_keyholder_${message.id}`).setLabel('🗝 Key').setStyle(ButtonStyle.Success)
+  );
+
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`undo_signup_${message.id}`).setLabel('↩ Undo').setStyle(ButtonStyle.Danger)
+  );
+
   const trackerMessage = await message.channel.send({ embeds: [trackerEmbed], components: [row1, row2] });
 
   eventCache.set(message.id, {
