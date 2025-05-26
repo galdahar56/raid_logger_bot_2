@@ -15,7 +15,6 @@ const auth = new google.auth.GoogleAuth({
 const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const eventCache = new Map();
-const pendingFilledMessages = new Map();
 
 client.on('ready', () => {
   console.log(`✅ Bot ready as ${client.user.tag}`);
@@ -58,7 +57,7 @@ client.on('messageCreate', async message => {
 
   const trackerEmbed = new EmbedBuilder()
     .setTitle('📥 Sign-Up Tracker')
-    .setDescription('Click your role to be logged in the signup sheet for this event. You can also undo.')
+    .setDescription(`**Run ID:** ${runId}\nClick your role to be logged in the signup sheet for this event. You can also undo.`)
     .setColor(0x00AE86);
 
   const row1 = new ActionRowBuilder().addComponents(
@@ -92,12 +91,6 @@ client.on('interactionCreate', async interaction => {
 if (!event) {
   try {
     const originalMessage = await interaction.channel.messages.fetch(messageId);
-
-  if (originalMessage.author.id !== client.user.id) {
-    console.warn('⚠️ Cannot edit a message not authored by this bot.');
-    return;
-  }
-
     const embed = originalMessage.embeds[0];
 
     if (!embed || !embed.description) {
@@ -151,7 +144,7 @@ if (!event) {
       }
     }
 
-    if (Object.values(event.rolesUsed).includes(username) && !SUPER_USERS.includes(interaction.user.id)) {
+    if (Object.values(event.rolesUsed).includes(username)) {
       if (role === 'keyholder') {
         const alreadyHasKey = event.rolesUsed['keyholder'] === username;
         if (alreadyHasKey) {
@@ -169,62 +162,13 @@ if (!event) {
       }
     }
 
-    if (event.rolesUsed[role] && !SUPER_USERS.includes(interaction.user.id)) {
+    if (event.rolesUsed[role]) {
       await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
       return;
     }
 
     const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
     event.rolesUsed[role] = username;
-const allRolesFilled = ['tank', 'healer', 'dps1', 'dps2', 'keyholder'].every(r => event.rolesUsed[r]);
-if (allRolesFilled) {
-  if (pendingFilledMessages.has(event.runId)) clearTimeout(pendingFilledMessages.get(event.runId));
-
-  const timeout = setTimeout(async () => {
-    try {
-      const formData = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: 'Form Responses 1!A:Z'
-      });
-
-      const headers = formData.data.values[0];
-      const dataRows = formData.data.values.slice(1);
-      const runRow = dataRows.find(row => row.includes(event.runId));
-
-      if (!runRow) return;
-
-      const get = label => {
-        const colIndex = headers.findIndex(h => h.trim().toLowerCase() === label.toLowerCase());
-        return colIndex !== -1 ? runRow[colIndex] : 'N/A';
-      };
-
-      const embed = new EmbedBuilder()
-        .setTitle('✅ Carry Group Filled')
-        .setColor(0x2ECC71)
-        .addFields(
-          { name: 'Customer', value: get('Customer'), inline: true },
-          { name: 'Server', value: get('Server'), inline: true },
-          { name: 'Dungeon', value: get('Dungeon'), inline: true },
-          { name: 'Key Level', value: get('Key Level'), inline: true },
-          { name: 'Class', value: get('Class'), inline: true },
-          { name: 'Preferred Date', value: get('Preferred Date'), inline: true },
-          { name: 'Preferred Time', value: get('Preferred Time'), inline: true },
-          { name: 'Run_ID', value: event.runId, inline: false }
-        );
-
-      const formedChannel = await client.channels.fetch('1375189405257695412');
-      if (formedChannel) await formedChannel.send({ embeds: [embed] });
-
-    } catch (err) {
-      console.error('Failed to send formed group message:', err);
-    } finally {
-      pendingFilledMessages.delete(event.runId);
-    }
-  }, 15000);
-
-  pendingFilledMessages.set(event.runId, timeout);
-}
-
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
@@ -249,12 +193,6 @@ if (allRolesFilled) {
 
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
-
-  if (originalMessage.author.id !== client.user.id) {
-    console.warn('⚠️ Cannot edit a message not authored by this bot.');
-    return;
-  }
-
       const oldRows = originalMessage.components;
 
       const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
@@ -287,11 +225,6 @@ if (allRolesFilled) {
     }
 
     delete event.rolesUsed[userRole];
-if (pendingFilledMessages.has(event.runId)) {
-  clearTimeout(pendingFilledMessages.get(event.runId));
-  pendingFilledMessages.delete(event.runId);
-}
-
 
     const signupData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Signup Log!A:F' });
     const rowIndex = signupData.data.values.findIndex(row => row[0] === username && row[1] === userRole.toUpperCase() && row[3] === event.runId);
@@ -318,12 +251,6 @@ if (pendingFilledMessages.has(event.runId)) {
 
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
-
-  if (originalMessage.author.id !== client.user.id) {
-    console.warn('⚠️ Cannot edit a message not authored by this bot.');
-    return;
-  }
-
       const oldRows = originalMessage.components;
 
       const newRows = oldRows.map(row => new ActionRowBuilder().addComponents(
