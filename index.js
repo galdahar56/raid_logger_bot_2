@@ -222,9 +222,10 @@ client.on('interactionCreate', async interaction => {
 
         if (matchedRow) {
           const getValue = (label) => {
-            const idx = headers.indexOf(label);
-            return idx !== -1 ? matchedRow[idx] : 'N/A';
-          };
+              const idx = headers.indexOf(label);
+              const val = idx !== -1 ? matchedRow[idx] : null;
+          return val && val.trim() !== '' ? val : 'N/A';
+        };
 
           const notice = `✅ **Group Formed for ${getValue('Dungeon')} +${getValue('Key Level')}**\n` +
             `**Customer:** ${getValue('Customer')} - ${getValue('Server')} (${getValue('Class')})\n` +
