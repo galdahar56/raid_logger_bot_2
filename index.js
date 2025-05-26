@@ -119,16 +119,18 @@ client.on('interactionCreate', async interaction => {
       }
 
       const originalMessage = await interaction.channel.messages.fetch(messageId);
-      const oldRow = originalMessage.components[0];
-      const newRow = new ActionRowBuilder().addComponents(
-        oldRow.components.map(button => {
-          if (button.customId === interaction.customId) {
-            return ButtonBuilder.from(button).setDisabled(true);
-          }
-          return button;
-        })
-      );
-      await originalMessage.edit({ components: [newRow] });
+      if (originalMessage.components?.[0]) {
+        const oldRow = originalMessage.components[0];
+        const newRow = new ActionRowBuilder().addComponents(
+          oldRow.components.map(button => {
+            if (button.customId === interaction.customId) {
+              return ButtonBuilder.from(button).setDisabled(true);
+            }
+            return button;
+          })
+        );
+        await originalMessage.edit({ components: [newRow] });
+      }
 
       await interaction.reply({ content: `🗝 You are now the **Key Holder** for this run!`, ephemeral: true });
       return;
@@ -181,22 +183,24 @@ client.on('interactionCreate', async interaction => {
 
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
-      const oldRow = originalMessage.components[0];
+      if (originalMessage.components?.[0]) {
+        const oldRow = originalMessage.components[0];
 
-      const newRow = new ActionRowBuilder().addComponents(
-        oldRow.components.map(button => {
-          if (button.customId === `signup_dps_${messageId}` &&
-              event.rolesUsed.dps1 && event.rolesUsed.dps2) {
-            return ButtonBuilder.from(button).setDisabled(true);
-          }
-          if (button.customId === interaction.customId && button.customId !== `signup_dps_${messageId}`) {
-            return ButtonBuilder.from(button).setDisabled(true);
-          }
-          return button;
-        })
-      );
+        const newRow = new ActionRowBuilder().addComponents(
+          oldRow.components.map(button => {
+            if (button.customId === `signup_dps_${messageId}` &&
+                event.rolesUsed.dps1 && event.rolesUsed.dps2) {
+              return ButtonBuilder.from(button).setDisabled(true);
+            }
+            if (button.customId === interaction.customId && button.customId !== `signup_dps_${messageId}`) {
+              return ButtonBuilder.from(button).setDisabled(true);
+            }
+            return button;
+          })
+        );
 
-      await originalMessage.edit({ components: [newRow] });
+        await originalMessage.edit({ components: [newRow] });
+      }
     } catch (err) {
       console.error('Failed to disable button:', err);
     }
