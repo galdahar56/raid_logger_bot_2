@@ -66,7 +66,7 @@ client.on('messageCreate', async message => {
     new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`signup_healer_${message.id}`).setLabel('💉 Healer').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`signup_dps_${message.id}`).setLabel('⚔ DPS').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`signup_keyholder_${message.id}`).setLabel('🗝 Key').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`signup_keyholder_${message.id}`).setLabel('🗝 Key Holder').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`undo_signup_${message.id}`).setLabel('↩ Undo').setStyle(ButtonStyle.Danger)
   );
 
@@ -94,12 +94,51 @@ client.on('interactionCreate', async interaction => {
       return;
     }
 
+    if (role === 'keyholder') {
+      const isSignedUp = ['tank', 'healer', 'dps1', 'dps2'].some(r => event.rolesUsed[r] === username);
+      if (!isSignedUp) {
+        await interaction.reply({ content: '❌ You must first sign up as a Tank, Healer, or DPS to claim the Key Holder role.', ephemeral: true });
+        return;
+      }
+      if (event.rolesUsed.keyholder) {
+        await interaction.reply({ content: '❌ The Key Holder has already been assigned.', ephemeral: true });
+        return;
+      }
+      event.rolesUsed.keyholder = username;
+
+      const scheduleData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Run_Schedule!A:Z' });
+      const runRow = scheduleData.data.values.findIndex(row => row[0] === event.runId);
+      if (runRow !== -1) {
+        const range = `Run_Schedule!${roleColumns.keyholder}${runRow + 1}`;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range,
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: [[username]] }
+        });
+      }
+
+      const originalMessage = await interaction.channel.messages.fetch(messageId);
+      const oldRow = originalMessage.components[0];
+      const newRow = new ActionRowBuilder().addComponents(
+        oldRow.components.map(button => {
+          if (button.customId === interaction.customId) {
+            return ButtonBuilder.from(button).setDisabled(true);
+          }
+          return button;
+        })
+      );
+      await originalMessage.edit({ components: [newRow] });
+
+      await interaction.reply({ content: `🗝 You are now the **Key Holder** for this run!`, ephemeral: true });
+      return;
+    }
+
     if (Object.values(event.rolesUsed).includes(username)) {
       await interaction.reply({ content: `❌ You’ve already signed up for this event.`, ephemeral: true });
       return;
     }
 
-    // Handle combined DPS logic
     if (role === 'dps') {
       if (!event.rolesUsed.dps1) {
         role = 'dps1';
@@ -163,65 +202,6 @@ client.on('interactionCreate', async interaction => {
     }
 
     await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
-  }
-
-  if (action === 'undo') {
-    if (!event) {
-      await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
-      return;
-    }
-
-    const userRole = Object.keys(event.rolesUsed).find(r => event.rolesUsed[r] === username);
-    if (!userRole) {
-      await interaction.reply({ content: `❌ You haven't signed up for this event.`, ephemeral: true });
-      return;
-    }
-
-    delete event.rolesUsed[userRole];
-
-    const signupData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Signup Log!A:F' });
-    const rowIndex = signupData.data.values.findIndex(row => row[0] === username && row[1] === userRole.toUpperCase() && row[3] === event.runId);
-    if (rowIndex !== -1) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        requestBody: {
-          requests: [{ deleteDimension: { range: { sheetId: 0, dimension: 'ROWS', startIndex: rowIndex + 1, endIndex: rowIndex + 2 } } }]
-        }
-      });
-    }
-
-    const scheduleData = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Run_Schedule!A:Z' });
-    const runRow = scheduleData.data.values.findIndex(row => row[0] === event.runId);
-    if (runRow !== -1 && roleColumns[userRole]) {
-      const range = `Run_Schedule!${roleColumns[userRole]}${runRow + 1}`;
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range,
-        valueInputOption: 'USER_ENTERED',
-        resource: { values: [['']] }
-      });
-    }
-
-    try {
-      const originalMessage = await interaction.channel.messages.fetch(messageId);
-      const oldRow = originalMessage.components[0];
-
-      const newRow = new ActionRowBuilder().addComponents(
-        oldRow.components.map(button => {
-          if (button.customId === `signup_dps_${messageId}` ||
-              button.customId.includes(`signup_${userRole}_`)) {
-            return ButtonBuilder.from(button).setDisabled(false);
-          }
-          return button;
-        })
-      );
-
-      await originalMessage.edit({ components: [newRow] });
-    } catch (err) {
-      console.error('Failed to re-enable button:', err);
-    }
-
-    await interaction.reply({ content: `❌ Your signup for **${userRole.toUpperCase()}** has been removed.`, ephemeral: true });
   }
 });
 
