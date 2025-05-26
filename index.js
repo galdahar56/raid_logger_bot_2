@@ -39,11 +39,9 @@ client.on('messageCreate', async message => {
     if (dateMatch) {
       const rawDate = dateMatch[1].replace(/[*_`~]/g, '').trim();
       const parsedDate = new Date(rawDate);
-      if (!isNaN(parsedDate)) {
-        eventTime = parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
-      } else {
-        eventTime = rawDate;
-      }
+      eventTime = !isNaN(parsedDate)
+        ? parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' })
+        : rawDate;
     }
 
     const runIdMatch = embed.description.match(/Run\s*ID[:\-]?\s*(.+)/i);
@@ -96,6 +94,14 @@ client.on('interactionCreate', async interaction => {
     if (!event) {
       await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
       return;
+    }
+
+    if (role === 'keyholder') {
+      const hasMainRole = ['tank', 'healer', 'dps1', 'dps2'].some(r => event.rolesUsed[r] === username);
+      if (!hasMainRole) {
+        await interaction.reply({ content: '❌ You must sign up for Tank, Healer, or DPS first before claiming Key Holder.', ephemeral: true });
+        return;
+      }
     }
 
     if (Object.values(event.rolesUsed).includes(username)) {
