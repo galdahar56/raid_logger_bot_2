@@ -57,7 +57,7 @@ client.on('messageCreate', async message => {
 
   const trackerEmbed = new EmbedBuilder()
     .setTitle('📥 Sign-Up Tracker')
-    .setDescription('**Run ID:** ${runId}\nClick your role to be logged in the signup sheet for this event. You can also undo.')
+    .setDescription(`**Run ID:** ${runId}\nClick your role to be logged in the signup sheet for this event. You can also undo.`)
     .setColor(0x00AE86);
 
   const row1 = new ActionRowBuilder().addComponents(
