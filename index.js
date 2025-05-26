@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { google } = require('googleapis');
@@ -93,6 +94,7 @@ client.on('interactionCreate', async interaction => {
     try {
       const originalMessage = await interaction.channel.messages.fetch(messageId);
       const embed = originalMessage.embeds[0];
+
       if (!embed || !embed.description) {
         await interaction.reply({ content: '⚠️ This event is missing required data.', ephemeral: true });
         return;
@@ -130,9 +132,25 @@ client.on('interactionCreate', async interaction => {
   const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'K' };
 
   if (action === 'signup') {
+    if (role === 'keyholder') {
+      const hasMainRole = ['tank', 'healer', 'dps1', 'dps2'].some(r => event.rolesUsed[r] === username);
+      if (!hasMainRole) {
+        await interaction.reply({ content: '❌ You must sign up for Tank, Healer, or DPS first before claiming Key Holder.', ephemeral: true });
+        return;
+      }
+    }
+
     if (Object.values(event.rolesUsed).includes(username)) {
-      await interaction.reply({ content: '❌ You’ve already signed up for this event.', ephemeral: true });
-      return;
+      if (role === 'keyholder') {
+        const alreadyHasKey = event.rolesUsed['keyholder'] === username;
+        if (alreadyHasKey) {
+          await interaction.reply({ content: `❌ You’ve already claimed the Key Holder role.`, ephemeral: true });
+          return;
+        }
+      } else {
+        await interaction.reply({ content: `❌ You’ve already signed up for this event.`, ephemeral: true });
+        return;
+      }
     }
 
     if (event.rolesUsed[role]) {
@@ -140,9 +158,8 @@ client.on('interactionCreate', async interaction => {
       return;
     }
 
-    event.rolesUsed[role] = username;
-
     const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
+    event.rolesUsed[role] = username;
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
@@ -185,7 +202,6 @@ client.on('interactionCreate', async interaction => {
 
     await interaction.reply({ content: `✅ You signed up as **${role.toUpperCase()}**`, ephemeral: true });
 
-    // ✅ Group formed check
     if (['tank', 'healer', 'dps1', 'dps2', 'keyholder'].every(r => event.rolesUsed[r]) && !formedGroupsCache.has(event.runId)) {
       formedGroupsCache.add(event.runId);
 
@@ -213,8 +229,6 @@ client.on('interactionCreate', async interaction => {
 
           const formedChannel = await client.channels.fetch(FORMED_CHANNEL_ID);
           await formedChannel.send(notice);
-        } else {
-          console.warn(`No form data found for Run_ID ${event.runId}`);
         }
       } catch (err) {
         console.error('Error sending formed group notice:', err);
