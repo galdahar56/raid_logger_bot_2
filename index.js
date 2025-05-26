@@ -105,8 +105,21 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (Object.values(event.rolesUsed).includes(username)) {
-      await interaction.reply({ content: `❌ You’ve already signed up for this event.`, ephemeral: true });
-      return;
+      if (role === 'keyholder') {
+        const alreadyHasKey = event.rolesUsed['keyholder'] === username;
+        if (alreadyHasKey) {
+          await interaction.reply({ content: `❌ You’ve already claimed the Key Holder role.`, ephemeral: true });
+          return;
+        }
+        const hasMainRole = ['tank', 'healer', 'dps1', 'dps2'].some(r => event.rolesUsed[r] === username);
+        if (!hasMainRole) {
+          await interaction.reply({ content: '❌ You must first sign up for another role before claiming Key Holder.', ephemeral: true });
+          return;
+        }
+      } else {
+        await interaction.reply({ content: `❌ You’ve already signed up for this event.`, ephemeral: true });
+        return;
+      }
     }
 
     if (event.rolesUsed[role]) {
