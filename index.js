@@ -50,6 +50,11 @@ client.on('messageCreate', async message => {
     if (runIdMatch) runId = runIdMatch[1].replace(/[*_`~]/g, '').trim();
   }
 
+  const trackerEmbed = new EmbedBuilder()
+    .setTitle('📥 Sign-Up Tracker')
+    .setDescription('Click your role to be logged in the signup sheet for this event. You can also undo.')
+    .setColor(0x00AE86);
+
   const trackerMessage = await message.channel.send({ embeds: [trackerEmbed], components: [row1, row2] });
 
   eventCache.set(message.id, {
@@ -60,12 +65,7 @@ client.on('messageCreate', async message => {
     trackerMessageId: trackerMessage.id
   });
 
-  return;
-
-  const trackerEmbed = new EmbedBuilder()
-    .setTitle('📥 Sign-Up Tracker')
-    .setDescription('Click your role to be logged in the signup sheet for this event. You can also undo.')
-    .setColor(0x00AE86);
+  
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
