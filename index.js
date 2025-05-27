@@ -105,15 +105,24 @@ client.on('interactionCreate', async interaction => {
         return;
       }
     }
-    
+
     if (!event) {
       await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
       return;
     }
 
     if (Object.values(event.rolesUsed).includes(username)) {
-      await interaction.reply({ content: `❌ You’ve already signed up for this event.`, ephemeral: true });
-      return;
+      const alreadySigned = Object.entries(event.rolesUsed).find(([r, user]) => user === username)?.[0];
+      if (role === 'keyholder') {
+        const eligibleRoles = ['tank', 'healer', 'dps1', 'dps2'];
+        if (!eligibleRoles.includes(alreadySigned)) {
+         await interaction.reply({ content: `❌ Only users who signed up for a main role may claim Key Holder.`, ephemeral: true });
+          return;
+       }
+     } else {
+       await interaction.reply({ content: `❌ You’ve already signed up for this event.`, ephemeral: true });
+       return;
+     }
     }
 
     if (event.rolesUsed[role]) {
