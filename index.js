@@ -88,7 +88,47 @@ client.on('interactionCreate', async interaction => {
   const role = parts[1];
   const messageId = parts[2];
   const username = interaction.user.tag;
-  const event = eventCache.get(messageId);
+  let event = eventCache.get(messageId);
+
+if (!event) {
+  try {
+    const originalMessage = await interaction.channel.messages.fetch(messageId);
+    const embed = originalMessage.embeds[0];
+
+    if (!embed || !embed.description) {
+      await interaction.reply({ content: '⚠️ This event is missing required data.', ephemeral: true });
+      return;
+    }
+
+    const dungeonMatch = embed.description.match(/Dungeon[:\-]?\s*(.+)/i);
+    const dateMatch = embed.description.match(/Date[:\-]?\s*(.+)/i);
+    const runIdMatch = embed.description.match(/Run\s*ID[:\-]?\s*(.+)/i);
+
+    if (dungeonMatch && dateMatch && runIdMatch) {
+      const rawDate = dateMatch[1].replace(/[*_`~]/g, '').trim();
+      const parsedDate = new Date(rawDate);
+      const formattedTime = !isNaN(parsedDate)
+        ? parsedDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' })
+        : rawDate;
+
+      event = {
+        dungeon: dungeonMatch[1].replace(/[*_`~]/g, '').trim(),
+        runId: runIdMatch[1].replace(/[*_`~]/g, '').trim(),
+        eventTime: formattedTime,
+        rolesUsed: {}
+      };
+      eventCache.set(messageId, event);
+    } else {
+      await interaction.reply({ content: '⚠️ Could not extract event details from message.', ephemeral: true });
+      return;
+    }
+  } catch (err) {
+    console.error('Failed to restore event from message:', err);
+    await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
+    return;
+  }
+}
+
 
   const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'J' };
 
