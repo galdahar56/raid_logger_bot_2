@@ -90,9 +90,22 @@ client.on('interactionCreate', async interaction => {
   const username = interaction.user.tag;
   const event = eventCache.get(messageId);
 
-  const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'K' };
+  const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'J' };
 
   if (action === 'signup') {
+    if (role === 'keyholder') {
+      const eligibleRoles = ['tank', 'healer', 'dps1', 'dps2'];
+      const hasMainRole = eligibleRoles.some(r => event.rolesUsed[r] === username);
+
+      if (!hasMainRole) {
+        await interaction.reply({
+          content: '❌ Only users who signed up for Tank, Healer, DPS 1, or DPS 2 may claim the Key Holder role.',
+          ephemeral: true
+        });
+        return;
+      }
+    }
+    
     if (!event) {
       await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
       return;
