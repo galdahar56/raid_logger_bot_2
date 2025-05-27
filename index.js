@@ -57,10 +57,11 @@ client.on('messageCreate', async message => {
     rolesUsed: {}
   });
 
-  const trackerEmbed = new EmbedBuilder()
-    .setTitle('📥 Sign-Up Tracker')
-    .setDescription('Click your role to be logged in the signup sheet for this event. You can also undo.')
-    .setColor(0x00AE86);
+const trackerEmbed = new EmbedBuilder()
+  .setTitle('📥 Sign-Up Tracker')
+  .setDescription(`**Run ID:** ${runId}\nClick your role to be logged in the signup sheet for this event. You can also undo.`)
+  .setColor(0x00AE86);
+
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`signup_tank_${message.id}`).setLabel('🛡 Tank').setStyle(ButtonStyle.Primary),
@@ -128,7 +129,7 @@ if (!event) {
     return;
   }
 }
-
+  
 
   const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'J' };
 
