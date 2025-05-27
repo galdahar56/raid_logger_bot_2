@@ -15,6 +15,9 @@ const auth = new google.auth.GoogleAuth({
 const SHEET_ID = process.env.SHEET_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const eventCache = new Map();
+const SUPER_USERS = ['774277998936457247'];  // Replace with your actual ID
+const isSuperUser = (userId) => SUPER_USERS.includes(userId);
+
 
 client.on('ready', () => {
   console.log(`✅ Bot ready as ${client.user.tag}`);
@@ -134,25 +137,26 @@ if (!event) {
   const roleColumns = { tank: 'F', healer: 'G', dps1: 'H', dps2: 'I', keyholder: 'J' };
 
   if (action === 'signup') {
-    if (role === 'keyholder') {
+    if (role === 'keyholder' && !isSuperUser(interaction.user.id)) {
       const eligibleRoles = ['tank', 'healer', 'dps1', 'dps2'];
       const hasMainRole = eligibleRoles.some(r => event.rolesUsed[r] === username);
 
       if (!hasMainRole) {
         await interaction.reply({
-          content: '❌ Only users who signed up for Tank, Healer, DPS 1, or DPS 2 may claim the Key Holder role.',
-          ephemeral: true
+         content: '❌ Only users who signed up for Tank, Healer, DPS 1, or DPS 2 may claim the Key Holder role.',
+         ephemeral: true
         });
-        return;
-      }
+       return;
+     }
     }
+
 
     if (!event) {
       await interaction.reply({ content: '⚠️ This event is no longer active.', ephemeral: true });
       return;
     }
 
-    if (Object.values(event.rolesUsed).includes(username)) {
+    if (Object.values(event.rolesUsed).includes(username) && !isSuperUser(interaction.user.id)) {
       const alreadySigned = Object.entries(event.rolesUsed).find(([r, user]) => user === username)?.[0];
       if (role === 'keyholder') {
         const eligibleRoles = ['tank', 'healer', 'dps1', 'dps2'];
@@ -166,7 +170,7 @@ if (!event) {
      }
     }
 
-    if (event.rolesUsed[role]) {
+    if (event.rolesUsed[role] && !isSuperUser(interaction.user.id)) {
       await interaction.reply({ content: `❌ The **${role.toUpperCase()}** role has already been taken.`, ephemeral: true });
       return;
     }
