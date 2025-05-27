@@ -7,7 +7,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-const SUPER_USERS = ['your_discord_user_id']; // Replace this with your Discord user ID
+const SUPER_USERS = ['774277998936457247']; // Replace this with your Discord user ID
 
 const auth = new google.auth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_SERVICE_JSON),
